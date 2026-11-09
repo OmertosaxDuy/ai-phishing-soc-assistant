@@ -5,3 +5,5 @@ __pycache__/
 .env
 .idea/
 .vscode/
+app_week1_backup.py
+app_week2.py

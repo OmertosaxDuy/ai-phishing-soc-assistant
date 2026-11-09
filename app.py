@@ -1,11 +1,9 @@
-
 import json
-
 import streamlit as st
 
 from core.email_parser import parse_email
-
-
+from core.risk_scoring import assess_email_risk
+from core.threat_intel import check_domain
 st.set_page_config(
     page_title="AI Phishing SOC Assistant",
     page_icon="🛡️",
@@ -66,7 +64,12 @@ def main():
 
     try:
         raw = uploaded_file.getvalue()
+
+        # Week 1: Email Forensics
         result = parse_email(raw)
+
+        # Week 2: Detection & Risk Scoring
+        assessment = assess_email_risk(result)
 
     except (ValueError, TypeError) as error:
         st.error(f"Cannot parse email: {error}")
@@ -80,6 +83,72 @@ def main():
         return
 
     st.success("Email parsed successfully!")
+
+    
+    # ==========================================
+    # WEEK 2 - PHISHING RISK ASSESSMENT
+    # ==========================================
+
+    st.header("Phishing Risk Assessment")
+
+    risk_score = assessment["risk_score"]
+    risk_level = assessment["risk_level"]
+    total_findings = assessment["total_findings"]
+
+    risk_col1, risk_col2, risk_col3 = st.columns(3)
+
+    risk_col1.metric(
+        "Risk Score",
+        f"{risk_score}/100"
+    )
+
+    risk_col2.metric(
+        "Risk Level",
+        risk_level
+    )
+
+    risk_col3.metric(
+        "Detection Findings",
+        total_findings
+    )
+
+    st.progress(
+        min(1.0, max(0.0, risk_score / 100))
+    )
+
+    if risk_level == "High":
+        st.error(
+            "HIGH RISK: Multiple suspicious indicators detected."
+        )
+
+    elif risk_level == "Medium":
+        st.warning(
+            "MEDIUM RISK: Email requires analyst investigation."
+        )
+
+    else:
+        st.info(
+            "LOW RISK: Few indicators detected. "
+            "This does not guarantee the email is safe."
+        )
+
+    st.subheader("Detection Findings")
+
+    if assessment["findings"]:
+        for finding in assessment["findings"]:
+            with st.expander(
+                f'{finding["rule_id"]} — '
+                f'+{finding["score"]} points',
+                expanded=True
+            ):
+                st.write(finding["description"])
+    else:
+        st.info(
+            "No suspicious indicators matched the current rules."
+        )
+
+    st.divider()
+
 
     iocs = result["iocs"]
 
@@ -112,12 +181,13 @@ def main():
         "not a phishing risk score."
     )
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Overview",
         "Email Headers",
         "IOC Analysis",
         "Email Content",
-        "Attachments"
+        "Attachments",
+        "Threat Intelligence"
     ])
 
     # ---------- OVERVIEW ----------
@@ -299,13 +369,140 @@ def main():
 
                 st.divider()
 
+    
+    # ---------- THREAT INTELLIGENCE ----------
+    with tab6:
+        st.subheader("VirusTotal Threat Intelligence")
+
+        st.info(
+            "Domain lookup is performed only when "
+            "you press the Check Domain Reputation button."
+        )
+
+        domains = iocs.get("domains", [])
+
+        if not domains:
+            st.warning(
+                "No domains were extracted from this email."
+            )
+
+        else:
+            selected_domain = st.selectbox(
+                "Select a domain to investigate",
+                options=domains
+            )
+
+            st.code(selected_domain, language=None)
+
+            if st.button(
+                "Check Domain Reputation",
+                type="primary"
+            ):
+                with st.spinner(
+                    "Checking VirusTotal reputation..."
+                ):
+                    vt_result = check_domain(
+                        selected_domain
+                    )
+
+                st.session_state["vt_result"] = vt_result
+                st.session_state["vt_email_hash"] = (
+                    result["email_sha256"]
+                )
+
+            vt_result = st.session_state.get(
+                "vt_result"
+            )
+
+            if (
+                vt_result
+                and st.session_state.get("vt_email_hash")
+                == result["email_sha256"]
+                and vt_result.get("domain")
+                == selected_domain
+            ):
+                status = vt_result.get("status")
+
+                if status == "found":
+                    st.success(
+                        "VirusTotal report retrieved."
+                    )
+
+                    col1, col2 = st.columns(2)
+
+                    col1.metric(
+                        "Malicious",
+                        vt_result.get("malicious", 0)
+                    )
+
+                    col2.metric(
+                        "Suspicious",
+                        vt_result.get("suspicious", 0)
+                    )
+
+                    st.json(vt_result)
+
+                    if (
+                        vt_result.get("malicious", 0) > 0
+                        or vt_result.get("suspicious", 0) > 0
+                    ):
+                        st.warning(
+                            "Security engines flagged "
+                            "this domain. Analyst review required."
+                        )
+
+                elif status == "invalid":
+                    st.warning(
+                        "This is an invalid or reserved "
+                        "sample domain. No API call was made."
+                    )
+
+                elif status == "not_configured":
+                    st.info(
+                        "VirusTotal API key is not configured."
+                    )
+
+                elif status == "unknown":
+                    st.warning(
+                        "No existing VirusTotal report. "
+                        "The domain's safety is unknown."
+                    )
+
+                elif status == "rate_limited":
+                    st.error(
+                        "VirusTotal quota exceeded. "
+                        "Try again later."
+                    )
+
+                else:
+                    st.error(
+                        "VirusTotal lookup failed."
+                    )
+
+
     # ---------- EXPORT ----------
     st.divider()
 
     st.subheader("Export Investigation")
 
+    # Retrieve the VirusTotal result from session state
+    vt_result = st.session_state.get("vt_result")
+
+    # Only include a result associated with
+    # the currently uploaded email.
+    if (
+      st.session_state.get("vt_email_hash")
+      != result["email_sha256"]
+    ):
+      vt_result = None
+
+    investigation_report = {
+        "email_analysis": result,
+        "risk_assessment": assessment,
+        "threat_intelligence": vt_result
+    }
     json_result = json.dumps(
-        result,
+        investigation_report,
         indent=4,
         ensure_ascii=False
     )

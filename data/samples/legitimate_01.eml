@@ -1,0 +1,19 @@
+From: "HR Department" <hr@company.example>
+To: employee@company.example
+Subject: Weekly Team Meeting
+Date: Mon, 09 Nov 2026 10:00:00 +0700
+Message-ID: <meeting001@company.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hello Team,
+
+This is a reminder about our weekly team meeting.
+
+Time: 10:00 AM
+Location: Meeting Room A
+
+Please prepare your weekly progress report.
+
+Best regards,
+HR Department

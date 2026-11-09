@@ -1,0 +1,36 @@
+From: "Microsoft Security" <security@micros0ft.example>
+To: employee@example.com
+Reply-To: verification@account-check.example
+Subject: Urgent: Verify Your Microsoft 365 Account
+Date: Mon, 09 Nov 2026 09:00:00 +0700
+Message-ID: <phishing001@example.com>
+MIME-Version: 1.0
+Authentication-Results: mail.example.com; spf=fail; dkim=none; dmarc=fail
+Content-Type: multipart/alternative; boundary="BOUNDARY123"
+
+--BOUNDARY123
+Content-Type: text/plain; charset="utf-8"
+
+Dear User,
+
+Your Microsoft 365 account will be disabled.
+
+Please verify your account immediately:
+
+https://login-check.example/verify
+
+Failure to verify may result in account suspension.
+
+--BOUNDARY123
+Content-Type: text/html; charset="utf-8"
+
+<html>
+<body>
+<p>Dear User,</p>
+<p>Your Microsoft 365 account will be disabled.</p>
+<p>Please verify your account immediately:</p>
+<a href="https://login-check.example/verify">https://login.microsoft.example/verify</a>
+</body>
+</html>
+
+--BOUNDARY123--
